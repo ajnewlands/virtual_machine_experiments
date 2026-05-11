@@ -7,7 +7,8 @@ enum class Errors
 	NoSuchBlob,
 	InvalidOpCode,
 	ProgramOverrun,
-	StackUnderrun
+	StackUnderrun,
+	NoStackFrame
 };
 
 using RunResult = std::variant<int, Errors>;

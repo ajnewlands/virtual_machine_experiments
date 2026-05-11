@@ -10,6 +10,8 @@
 
 using namespace std;
 
+using stackFrame = vector<u_int64_t>;
+
 class Bytecode
 {
 private:
@@ -17,15 +19,19 @@ private:
 	vector<u_int8_t> _data;
 	/// instructions stream
 	vector<u_int8_t> _instructions;
+	/// How many arguments this function will consume from the stack.
+	u_int8_t _argc;
 
 public:
 	Bytecode() = delete;
 	Bytecode(Bytecode &&) = default;
 
 	/// Construct from raw parts
-	Bytecode(vector<u_int8_t> data, vector<u_int8_t> instructions);
+	Bytecode(vector<u_int8_t> data, vector<u_int8_t> instructions, u_int8_t argc);
 
 	OpCodeResult readOpCode(size_t i);
+	const u_int8_t *readBytes(size_t i, size_t count) const;
+	u_int8_t argc() const { return _argc; }
 };
 
 class AbelVm
@@ -33,13 +39,12 @@ class AbelVm
 private:
 	vector<unique_ptr<Bytecode>> _blobs;
 	map<string, size_t> _blobIndex;
-	/// @brief instruction pointer.
-	u_int64_t ip = 0;
 	/// The stack; each item is 64 bits.
-	vector<uint64_t> _stack;
+	vector<stackFrame> _stackFrames;
+
+	RunResult executeBlob(size_t index);
 
 public:
 	size_t registerBlob(string name, Bytecode blob);
-	void replaceStack(vector<u_int64_t> stack);
-	RunResult executeBlob(string name);
+	RunResult executeBlobByName(string name);
 };

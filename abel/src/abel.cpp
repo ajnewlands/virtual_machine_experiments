@@ -1,9 +1,11 @@
 #include "abel.hpp"
+#include <cstring>
 
-Bytecode::Bytecode(vector<u_int8_t> data, vector<u_int8_t> instructions)
+Bytecode::Bytecode(vector<u_int8_t> data, vector<u_int8_t> instructions, u_int8_t argc)
 {
 	this->_data = std::move(data);
 	this->_instructions = std::move(instructions);
+	this->_argc = argc;
 }
 
 OpCodeResult Bytecode::readOpCode(size_t i)
@@ -16,10 +18,20 @@ OpCodeResult Bytecode::readOpCode(size_t i)
 	{
 	case OP_RETURN:
 	case OP_ADD:
+	case OP_PUSH:
+	case OP_POP:
+	case OP_CALL:
 		return static_cast<OpCodes>(byte);
 	default:
 		return Errors::InvalidOpCode;
 	}
+}
+
+const u_int8_t *Bytecode::readBytes(size_t i, size_t count) const
+{
+	if (i + count > this->_instructions.size())
+		return nullptr;
+	return &this->_instructions[i];
 }
 
 size_t AbelVm::registerBlob(string name, Bytecode blob)
@@ -30,23 +42,28 @@ size_t AbelVm::registerBlob(string name, Bytecode blob)
 	return index;
 }
 
-void AbelVm::replaceStack(vector<u_int64_t> stack)
+RunResult AbelVm::executeBlobByName(string name)
 {
-	this->_stack = std::move(stack);
-}
-
-RunResult AbelVm::executeBlob(string name)
-{
-	/// Check the internal collection for the named blob
 	auto it = this->_blobIndex.find(name);
 	if (it == this->_blobIndex.end())
 		return Errors::NoSuchBlob;
-	auto &target = this->_blobs[it->second];
+	this->_stackFrames.push_back({});
+	return this->executeBlob(it->second);
+}
+
+RunResult AbelVm::executeBlob(size_t index)
+{
+	auto &target = this->_blobs[index];
+	/// instruction pointer.
+	u_int64_t ip = 0;
 
 	/// Start executing instructions until we hit OP_RETURN or run off the end of the world
 	auto op = OpCodes::OP_RETURN;
 	do
 	{
+		if (this->_stackFrames.empty())
+			return Errors::NoStackFrame;
+		auto &stack = this->_stackFrames.back();
 		OpCodeResult r = target->readOpCode(ip++);
 		if (auto error = std::get_if<Errors>(&r))
 			return *error;
@@ -58,14 +75,68 @@ RunResult AbelVm::executeBlob(string name)
 		{
 		case OpCodes::OP_ADD:
 		{
-			if (this->_stack.size() < 2)
+			if (stack.size() < 2)
 				return Errors::StackUnderrun;
-			uint64_t a = this->_stack.back();
-			this->_stack.pop_back();
-			uint64_t b = this->_stack.back();
-			this->_stack.pop_back();
-			this->_stack.push_back(a + b);
+			uint64_t a = stack.back();
+			stack.pop_back();
+			uint64_t b = stack.back();
+			stack.pop_back();
+			stack.push_back(a + b);
 			cout << "Add: " << a << " + " << b << " = " << (a + b) << endl;
+			break;
+		}
+		case OpCodes::OP_PUSH:
+		{
+			const u_int8_t *bytes = target->readBytes(ip, 8);
+			if (!bytes)
+				return Errors::ProgramOverrun;
+			uint64_t value;
+			memcpy(&value, bytes, 8);
+			stack.push_back(value);
+			cout << "Push: 0x" << hex << value << dec << endl;
+			ip += 8;
+			break;
+		}
+		case OpCodes::OP_POP:
+		{
+			if (stack.empty())
+				return Errors::StackUnderrun;
+			uint64_t a = stack.back();
+			stack.pop_back();
+			cout << "Pop: 0x" << hex << a << dec << endl;
+			break;
+		}
+		case OpCodes::OP_CALL:
+		{
+			const u_int8_t *bytes = target->readBytes(ip, 8);
+			if (!bytes)
+				return Errors::ProgramOverrun;
+			uint64_t callee;
+			memcpy(&callee, bytes, 8);
+			ip += 8;
+
+			if (this->_blobs.size() < callee)
+				return Errors::NoSuchBlob;
+
+			u_int8_t argc = this->_blobs[callee]->argc();
+			if (stack.size() < argc)
+				return Errors::StackUnderrun;
+
+			// Slice off argc elements from current stack into new frame
+			stackFrame newFrame(stack.end() - argc, stack.end());
+			stack.erase(stack.end() - argc, stack.end());
+			this->_stackFrames.push_back(std::move(newFrame));
+
+			cout << "Calling " << callee << endl;
+			auto r = this->executeBlob(callee);
+			if (auto error = std::get_if<Errors>(&r))
+				return *error;
+
+			// Pop return value, pop frame, push return value onto caller's frame
+			uint64_t retVal = static_cast<uint64_t>(std::get<int>(r));
+			this->_stackFrames.pop_back();
+			this->_stackFrames.back().push_back(retVal);
+
 			break;
 		}
 		case OpCodes::OP_RETURN:
@@ -76,5 +147,9 @@ RunResult AbelVm::executeBlob(string name)
 
 	} while (op != OpCodes::OP_RETURN);
 
-	return 0;
+	cout << "Returning from " << index << endl;
+
+	auto &stack = this->_stackFrames.back();
+	int retVal = stack.empty() ? 0 : static_cast<int>(stack.back());
+	return retVal;
 }
