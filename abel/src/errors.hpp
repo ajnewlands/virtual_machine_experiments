@@ -8,7 +8,8 @@ enum class Errors
 	InvalidOpCode,
 	ProgramOverrun,
 	StackUnderrun,
-	NoStackFrame
+	NoStackFrame,
+	SlotOutOfRange
 };
 
 using RunResult = std::variant<int, Errors>;

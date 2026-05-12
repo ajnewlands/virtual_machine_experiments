@@ -1,10 +1,9 @@
 cmake_minimum_required(VERSION 3.28)
 project(abel)
 
-add_executable(abel)
+add_library(libabel SHARED src/abel.cpp)
+target_include_directories(libabel PUBLIC src)
+set_target_properties(libabel PROPERTIES OUTPUT_NAME abel)
 
-target_sources(abel
-	PRIVATE
-		src/main.cpp
-		src/abel.cpp
-)
+add_executable(abel src/main.cpp)
+target_link_libraries(abel PRIVATE libabel)

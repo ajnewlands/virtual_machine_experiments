@@ -4,6 +4,6 @@ It is implemented in C++ (17 required) mainly because I hadn't written any C/C++
 
 Abel is a stack machine which provides a stack per subroutine (i.e. a badly behaved callee cannot corrupt the callers stack).
 
-Abel can only push/pop/add and call subroutines (with a fixed single return value required).
+Abel can only push/pop/add/load/store and call subroutines (with a fixed single return value required).
 
 Abel isn't really useful for anything except playing with the most fundamental elements of a stack machine.

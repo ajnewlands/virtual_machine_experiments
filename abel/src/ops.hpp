@@ -15,6 +15,10 @@ enum OpCodes : u_int8_t
 	OP_POP = 3,
 	/// @brief Call the bytecode with the given index (read from bytecode)
 	OP_CALL = 4,
+	/// @brief Read inline u8 slot index, push stack[index] onto stack top
+	OP_LOAD = 5,
+	/// @brief Read inline u8 slot index, pop stack top into stack[index]
+	OP_STORE = 6,
 };
 
 using OpCodeResult = std::variant<OpCodes, Errors>;

@@ -21,6 +21,8 @@ OpCodeResult Bytecode::readOpCode(size_t i)
 	case OP_PUSH:
 	case OP_POP:
 	case OP_CALL:
+	case OP_LOAD:
+	case OP_STORE:
 		return static_cast<OpCodes>(byte);
 	default:
 		return Errors::InvalidOpCode;
@@ -137,6 +139,36 @@ RunResult AbelVm::executeBlob(size_t index)
 			this->_stackFrames.pop_back();
 			this->_stackFrames.back().push_back(retVal);
 
+			break;
+		}
+		case OpCodes::OP_LOAD:
+		{
+			const u_int8_t *bytes = target->readBytes(ip, 1);
+			if (!bytes)
+				return Errors::ProgramOverrun;
+			u_int8_t slot = bytes[0];
+			ip += 1;
+			if (slot >= stack.size())
+				return Errors::SlotOutOfRange;
+			stack.push_back(stack[slot]);
+			cout << "Load: slot " << (int)slot << " = 0x" << hex << stack[slot] << dec << endl;
+			break;
+		}
+		case OpCodes::OP_STORE:
+		{
+			const u_int8_t *bytes = target->readBytes(ip, 1);
+			if (!bytes)
+				return Errors::ProgramOverrun;
+			u_int8_t slot = bytes[0];
+			ip += 1;
+			if (stack.empty())
+				return Errors::StackUnderrun;
+			uint64_t value = stack.back();
+			stack.pop_back();
+			if (slot >= stack.size())
+				return Errors::SlotOutOfRange;
+			stack[slot] = value;
+			cout << "Store: slot " << (int)slot << " = 0x" << hex << value << dec << endl;
 			break;
 		}
 		case OpCodes::OP_RETURN:
